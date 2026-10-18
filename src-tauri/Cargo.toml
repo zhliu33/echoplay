@@ -1,0 +1,47 @@
+[package]
+name = "echo-play"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["lzh"]
+license = ""
+repository = "https://github.com/zhliu33/echoplay"
+edition = "2024"
+rust-version = "1.90"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.1", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.12.1", features = ["protocol-asset"] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
+# 音乐库扫描与索引
+rayon = "1.10"
+lofty = "0.22"
+rusqlite = { version = "0.32", features = ["bundled"] }
+jwalk = "0.8"
+dirs = "5.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+# 音频播放
+rodio = "0.20"
+symphonia = { version = "0.5", features = ["all"] }
+biquad = "0.4"
+
+# 图片处理
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+
+# 缓存
+lru = "0.12"

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=EchoPlay
+Name[zh_CN]=EchoPlay
+Comment=A Tauri local music player
+Comment[zh_CN]=本地音乐播放器
+Exec=echoplay %U
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+StartupNotify=true

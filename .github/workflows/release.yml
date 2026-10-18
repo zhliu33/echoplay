@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # Updater 签名密钥（用于生成 .sig 签名，请在你的仓库 Settings → Secrets 中配置）
+  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest"
+            args: "--target x86_64-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: "--bundles deb"
+          - platform: "windows-latest"
+            args: ""
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Sync node version and setup cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build the app
+        run: npm run tauri:build -- ${{ matrix.args }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.args }}
+          path: |
+            src-tauri/target/release/bundle/**/*
+            !src-tauri/target/release/bundle/**/*.blockmap
+          if-no-files-found: warn
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate updater metadata (latest.json)
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          REPO="${GITHUB_REPOSITORY}"
+          BASE="https://github.com/${REPO}/releases/download/${GITHUB_REF_NAME}"
+          {
+            echo "{"
+            echo "  \"version\": \"${VERSION}\","
+            echo "  \"notes\": \"EchoPlay release ${VERSION}\","
+            echo "  \"pub_date\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+            echo "  \"platforms\": {"
+            FIRST=1
+            while IFS= read -r -d '' f; do
+              name="$(basename "$f" .sig)"
+              case "$name" in
+                *_amd64.deb|*.deb)        key="linux-x86_64" ;;
+                *x86_64.AppImage*)        key="linux-x86_64" ;;
+                *aarch64.app.tar.gz)      key="darwin-aarch64" ;;
+                *x86_64.app.tar.gz)       key="darwin-x86_64" ;;
+                *.msi)                    key="windows-x86_64" ;;
+                *) continue ;;
+              esac
+              [ "$FIRST" -eq 1 ] || echo ","
+              FIRST=0
+              echo "    \"${key}\": { \"url\": \"${BASE}/${name}\", \"signature\": \"$(cat "${f}")\" }"
+            done < <(find artifacts -type f -name "*.sig" -print0)
+            echo "  }"
+            echo "}"
+          } > latest.json
+          find artifacts -type f -name "*.sig" -delete
+          cp latest.json artifacts/latest.json
+
+          # Flatten: move all bundle files to artifacts/ root so release asset
+          # names match the basenames referenced in latest.json URLs.
+          find artifacts -mindepth 2 -type f -exec mv -f {} artifacts/ \;
+          find artifacts -mindepth 1 -type d -empty -delete
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            EchoPlay release.
+          files: |
+            artifacts/**
