@@ -76,8 +76,16 @@ jobs:
         with:
           name: ${{ matrix.platform }}-${{ matrix.args }}
           path: |
-            src-tauri/target/release/bundle/**/*
-            !src-tauri/target/release/bundle/**/*.blockmap
+            src-tauri/target/**/bundle/**/*.deb
+            src-tauri/target/**/bundle/**/*.deb.sig
+            src-tauri/target/**/bundle/**/*.app.tar.gz
+            src-tauri/target/**/bundle/**/*.app.tar.gz.sig
+            src-tauri/target/**/bundle/**/*.dmg
+            src-tauri/target/**/bundle/**/*.dmg.sig
+            src-tauri/target/**/bundle/**/*.msi
+            src-tauri/target/**/bundle/**/*.msi.sig
+            src-tauri/target/**/bundle/**/*.exe
+            src-tauri/target/**/bundle/**/*.exe.sig
           if-no-files-found: warn
 
   release:
