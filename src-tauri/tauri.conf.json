@@ -33,7 +33,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFEMUY5Qjk3NzIwNjQ0MUEKUldRYVJBWnlsNXNmcmV2ZXRRZ2F1VGl1MXFVOU5SOHg2NkxDSnIwbUVKZThDR0w1UXNsdTNVWG8K",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ4RDBGQjE2NkREOTRERTQKUldUa1RkbHRGdnZRU0JINi8ybTl2SGg4UXg2b3BlSklRY3QyMFd4NUJOV0F0N2hKVU51WXNiQ0cK",
       "endpoints": [
         "https://github.com/zhliu33/echoplay/releases/latest/download/latest.json"
       ]
