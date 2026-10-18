@@ -10,9 +10,7 @@ permissions:
   contents: write
 
 env:
-  # Updater 签名密钥（用于生成 .sig 签名，请在你的仓库 Settings → Secrets 中配置）
   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
 jobs:
   build:
@@ -52,10 +50,22 @@ jobs:
       - name: Sync node version and setup cache
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Verify signing key
+        shell: bash
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY secret is not configured!"
+            echo "Please add it in Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          KEY_LEN=$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | wc -c)
+          echo "Signing key found, length: $KEY_LEN bytes"
+          printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | base64 -d > /dev/null 2>&1 && echo "Key is valid base64" || echo "::warning::Key may not be valid base64"
 
       - name: Build the app
         run: npm run tauri:build -- ${{ matrix.args }}
