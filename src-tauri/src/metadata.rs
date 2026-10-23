@@ -42,7 +42,6 @@ pub fn extract_metadata(path: &std::path::Path) -> Option<TrackMetadata> {
 pub fn extract_audio_info(path: &str) -> AudioTechnicalInfo {
     if let Ok(metadata) = lofty::read_from_path(path) {
         let file_type = Some(format!("{:?}", metadata.file_type()));
-        let codec = Some(format!("{:?}", metadata.file_type()));
         let props = metadata.properties();
 
         return AudioTechnicalInfo {
@@ -51,7 +50,7 @@ pub fn extract_audio_info(path: &str) -> AudioTechnicalInfo {
             bitrate: props.audio_bitrate(),
             channels: props.channels().map(|c| c as u16),
             bit_depth: props.bit_depth(),
-            codec,
+            codec: None,
         };
     }
     AudioTechnicalInfo {

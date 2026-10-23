@@ -7,6 +7,7 @@ mod metadata;
 mod models;
 mod scanner;
 mod fs_utils;
+mod symphonia_source;
 
 use library::MusicLibrary;
 use audio::AudioPlayer;
@@ -25,6 +26,11 @@ pub fn run() {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()
             .level(log::LevelFilter::Info)
+            .level_for("symphonia", log::LevelFilter::Error)
+            .level_for("symphonia_bundle_mp3", log::LevelFilter::Error)
+            .level_for("symphonia_metadata", log::LevelFilter::Error)
+            .level_for("symphonia_format_ogg", log::LevelFilter::Error)
+            .level_for("symphonia_format_flac", log::LevelFilter::Error)
             .build(),
         )?;
       }
@@ -42,6 +48,7 @@ pub fn run() {
       if let Some(win) = main_window.clone() {
         let win_clone = win.clone();
         app.listen("app-ready", move |_| {
+          let _ = win_clone.center();
           let _ = win_clone.show();
           let _ = win_clone.set_focus();
         });
@@ -50,6 +57,7 @@ pub fn run() {
         std::thread::spawn(move || {
           std::thread::sleep(std::time::Duration::from_secs(5));
           if !win_timeout.is_visible().unwrap_or(false) {
+            let _ = win_timeout.center();
             let _ = win_timeout.show();
           }
         });

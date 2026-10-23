@@ -81,60 +81,34 @@ impl MusicLibrary {
     }
 
 
-    pub fn write_tracks(&self, tracks: &[Track], force_rescan: bool) -> Result<usize> {
+    pub fn write_tracks(&self, tracks: &[Track]) -> Result<usize> {
         if tracks.is_empty() {
             return Ok(0);
         }
         self.conn.execute_batch("BEGIN")?;
         let result = (|| -> Result<usize> {
             let mut count = 0usize;
-            if force_rescan {
-                let mut stmt = self.conn.prepare(
-                    "UPDATE tracks SET
-                     title = ?2, artist = ?3, album = ?4, duration = ?5,
-                     track_number = ?6, disc_number = ?7, genre = ?8, year = ?9,
-                     file_size = ?10, modified_at = ?11
-                     WHERE path = ?1",
-                )?;
-                for track in tracks {
-                    stmt.execute(params![
-                        track.path,
-                        track.title,
-                        track.artist,
-                        track.album,
-                        track.duration,
-                        track.track_number,
-                        track.disc_number,
-                        track.genre,
-                        track.year,
-                        track.file_size,
-                        track.modified_at,
-                    ])?;
+            let mut stmt = self.conn.prepare(
+                "INSERT OR IGNORE INTO tracks
+                 (path, title, artist, album, duration, track_number, disc_number, genre, year, file_size, added_at, modified_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            )?;
+            for track in tracks {
+                if stmt.execute(params![
+                    track.path,
+                    track.title,
+                    track.artist,
+                    track.album,
+                    track.duration,
+                    track.track_number,
+                    track.disc_number,
+                    track.genre,
+                    track.year,
+                    track.file_size,
+                    track.added_at,
+                    track.modified_at,
+                ])? == 1 {
                     count += 1;
-                }
-            } else {
-                let mut stmt = self.conn.prepare(
-                    "INSERT OR IGNORE INTO tracks
-                     (path, title, artist, album, duration, track_number, disc_number, genre, year, file_size, added_at, modified_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-                )?;
-                for track in tracks {
-                    if stmt.execute(params![
-                        track.path,
-                        track.title,
-                        track.artist,
-                        track.album,
-                        track.duration,
-                        track.track_number,
-                        track.disc_number,
-                        track.genre,
-                        track.year,
-                        track.file_size,
-                        track.added_at,
-                        track.modified_at,
-                    ])? == 1 {
-                        count += 1;
-                    }
                 }
             }
             Ok(count)

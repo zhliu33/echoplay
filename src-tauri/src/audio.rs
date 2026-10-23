@@ -1,9 +1,8 @@
 use crate::equalizer::{EqualizerSource, EqGainsHandle};
+use crate::symphonia_source::SymphoniaSource;
 use rodio::source::SeekError;
-use rodio::{Decoder, Sink, OutputStream, Source};
+use rodio::{Sink, OutputStream, Source};
 use std::collections::VecDeque;
-use std::fs::File;
-use std::io::BufReader;
 use std::path::Path;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
@@ -16,6 +15,7 @@ const PREBUFFER_BLOCK: usize = 1024;
 
 struct PrebufferSource<S: Source<Item = f32> + Send + 'static> {
     inner: Arc<Mutex<S>>,
+    factory: Option<Arc<dyn Fn() -> S + Send + Sync>>,
     rx: Option<mpsc::Receiver<Vec<f32>>>,
     buf: VecDeque<f32>,
     sample_rate: u32,
@@ -25,7 +25,7 @@ struct PrebufferSource<S: Source<Item = f32> + Send + 'static> {
 }
 
 impl<S: Source<Item = f32> + Send + 'static> PrebufferSource<S> {
-    fn new(inner: S) -> Self {
+    fn with_factory(inner: S, factory: Option<Arc<dyn Fn() -> S + Send + Sync>>) -> Self {
         let sample_rate = inner.sample_rate();
         let channels = inner.channels();
         let total_duration = inner.total_duration();
@@ -39,6 +39,7 @@ impl<S: Source<Item = f32> + Send + 'static> PrebufferSource<S> {
 
         Self {
             inner,
+            factory,
             rx: Some(rx),
             buf,
             sample_rate,
@@ -63,14 +64,23 @@ impl<S: Source<Item = f32> + Send + 'static> PrebufferSource<S> {
         thread::spawn(move || {
             loop {
                 let mut block: Vec<f32> = Vec::with_capacity(PREBUFFER_BLOCK);
-                {
-                    let mut src = inner.lock().unwrap();
-                    for _ in 0..PREBUFFER_BLOCK {
-                        match src.next() {
-                            Some(s) => block.push(s),
-                            None => break,
+                let panicked = {
+                    let mut src = match inner.lock() {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner(),
+                    };
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        for _ in 0..PREBUFFER_BLOCK {
+                            match src.next() {
+                                Some(s) => block.push(s),
+                                None => break,
+                            }
                         }
-                    }
+                    }))
+                    .is_err()
+                };
+                if panicked {
+                    return;
                 }
                 if block.is_empty() {
                     return;
@@ -133,12 +143,62 @@ impl<S: Source<Item = f32> + Send + 'static> Source for PrebufferSource<S> {
         if let Some(handle) = self.producer.take() {
             let _ = handle.join();
         }
-        self.inner.lock().unwrap().try_seek(pos)?;
-        self.buf.clear();
+
+        let native_ok = {
+            let mut inner = match self.inner.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| inner.try_seek(pos)))
+                .map(|r| r.is_ok())
+                .unwrap_or(false)
+        };
+
+        if !native_ok {
+            if let Some(ref factory) = self.factory {
+                let skip_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    let mut new_inner = (factory)();
+                    let samples_to_skip = (pos.as_secs_f64()
+                        * self.sample_rate as f64
+                        * self.channels as f64) as u64;
+                    let mut skipped: u64 = 0;
+                    while skipped < samples_to_skip {
+                        if new_inner.next().is_none() {
+                            break;
+                        }
+                        skipped += 1;
+                    }
+                    new_inner
+                }));
+
+                match skip_result {
+                    Ok(new_inner) => {
+                        self.inner = Arc::new(Mutex::new(new_inner));
+                    }
+                    Err(_) => {
+                        let (tx, rx) = Self::make_channel(self.sample_rate, self.channels);
+                        self.rx = Some(rx);
+                        self.producer = Some(Self::spawn_producer(self.inner.clone(), tx));
+                        return Err(SeekError::NotSupported {
+                            underlying_source: std::any::type_name::<S>(),
+                        });
+                    }
+                }
+            } else {
+                let (tx, rx) = Self::make_channel(self.sample_rate, self.channels);
+                self.rx = Some(rx);
+                self.producer = Some(Self::spawn_producer(self.inner.clone(), tx));
+                return Err(SeekError::NotSupported {
+                    underlying_source: std::any::type_name::<S>(),
+                });
+            }
+        }
+
         let (tx, rx) = Self::make_channel(self.sample_rate, self.channels);
         self.rx = Some(rx);
         self.producer = Some(Self::spawn_producer(self.inner.clone(), tx));
 
+        self.buf.clear();
         let seek_prefill = Self::pre_samples(self.sample_rate, self.channels) / 5;
         Self::prefill(self.rx.as_ref().unwrap(), &mut self.buf, seek_prefill);
         Ok(())
@@ -170,13 +230,13 @@ impl AudioPlayer {
     }
 
     fn ensure_stream(&self) -> Result<(), String> {
-        if self._handle.lock().unwrap().is_some() {
+        if self._handle.lock().unwrap_or_else(|e| e.into_inner()).is_some() {
             return Ok(());
         }
         let (stream, handle) = OutputStream::try_default()
             .map_err(|e| format!("Failed to create audio output stream: {}", e))?;
-        *self._stream.lock().unwrap() = Some(stream);
-        *self._handle.lock().unwrap() = Some(handle);
+        *self._stream.lock().unwrap_or_else(|e| e.into_inner()) = Some(stream);
+        *self._handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
         Ok(())
     }
 
@@ -192,7 +252,7 @@ impl AudioPlayer {
 
     fn stop_monitor(&mut self) {
         self._is_monitoring.store(false, Ordering::SeqCst);
-        if let Some(thread) = self._monitor_thread.lock().unwrap().take() {
+        if let Some(thread) = self._monitor_thread.lock().unwrap_or_else(|e| e.into_inner()).take() {
             let _ = thread.join();
         }
     }
@@ -200,7 +260,7 @@ impl AudioPlayer {
 
     fn with_sink<R>(&self, f: impl FnOnce(&Sink) -> R) -> Option<R> {
         self.sink.as_ref().map(|arc| {
-            let sink = arc.lock().unwrap();
+            let sink = arc.lock().unwrap_or_else(|e| e.into_inner());
             f(&sink)
         })
     }
@@ -214,15 +274,15 @@ impl AudioPlayer {
 
         self.stop();
 
-        let file = File::open(path).map_err(|e| e.to_string())?;
+        let decoded = SymphoniaSource::new(path)?;
 
-        let reader = BufReader::with_capacity(256 * 1024, file);
-
-        let decoded = Decoder::new(reader).map_err(|e| e.to_string())?;
-
+        let path_buf = path.to_path_buf();
+        let factory: Arc<dyn Fn() -> SymphoniaSource + Send + Sync> = Arc::new(move || {
+            SymphoniaSource::new(&path_buf).expect("recreate decoder")
+        });
 
         let source = EqualizerSource::new(
-            PrebufferSource::new(decoded.convert_samples::<f32>()),
+            PrebufferSource::with_factory(decoded, Some(factory)),
             self.eq.clone(),
         );
 
@@ -253,7 +313,7 @@ impl AudioPlayer {
                     }
                     
                     let (paused, len, pos) = {
-                        let sink = sink_arc.lock().unwrap();
+                        let sink = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
                         (sink.is_paused(), sink.len(), sink.get_pos().as_secs_f64())
                     };
                     
@@ -273,7 +333,7 @@ impl AudioPlayer {
 
                 let _ = app_handle.emit("audio_ended", ());
             });
-            *self._monitor_thread.lock().unwrap() = Some(handle);
+            *self._monitor_thread.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
         }
     }
 
@@ -288,7 +348,7 @@ impl AudioPlayer {
     pub fn stop(&mut self) {
         self.stop_monitor();
         if let Some(ref sink_arc) = self.sink {
-            let sink = sink_arc.lock().unwrap();
+            let sink = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
             sink.stop();
         }
         self.sink = None;
@@ -318,7 +378,7 @@ impl AudioPlayer {
 
     pub fn seek(&self, position_secs: f64) -> Result<(), String> {
         if let Some(ref sink_arc) = self.sink {
-            let sink = sink_arc.lock().unwrap();
+            let sink = sink_arc.lock().unwrap_or_else(|e| e.into_inner());
             sink.try_seek(std::time::Duration::from_secs_f64(position_secs))
                 .map_err(|e| e.to_string())?;
             Ok(())

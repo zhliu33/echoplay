@@ -26,7 +26,7 @@ pub async fn scan_music_directory(
 
     let count = {
         let library = library_state.lock().map_err(|e| e.to_string())?;
-        library.write_tracks(&tracks, false).map_err(|e| e.to_string())?
+        library.write_tracks(&tracks).map_err(|e| e.to_string())?
     };
 
 
@@ -225,7 +225,6 @@ pub async fn get_cover_file(
 ) -> Result<Option<String>, String> {
     let tid = track_id as u64;
 
-
     {
         let cover_cache = cover_cache_state.lock().map_err(|e| e.to_string())?;
         if let Some(path) = cover_cache.get_thumbnail_file_path(tid, None) {
@@ -233,23 +232,11 @@ pub async fn get_cover_file(
         }
     }
 
-
-    let file_path = {
-        let library = library_state.lock().map_err(|e| e.to_string())?;
-        match library.get_track_by_id(track_id).map_err(|e| e.to_string())? {
-            Some(t) => Some(t.path),
-            None => return Ok(None),
-        }
-    };
-
-
-    if let Some(path) = file_path {
-        if let Some(cover) = metadata::extract_cover(&path) {
-            let cover_cache = cover_cache_state.lock().map_err(|e| e.to_string())?;
-            if let Some(thumb) = cover_cache.get_thumbnail_file_path(tid, Some(&cover.data)) {
-                cover_cache.remove_full_cover(tid);
-                return Ok(Some(thumb.to_string_lossy().to_string()));
-            }
+    if let Some(cover) = extract_track_cover(track_id, &library_state)? {
+        let cover_cache = cover_cache_state.lock().map_err(|e| e.to_string())?;
+        if let Some(thumb) = cover_cache.get_thumbnail_file_path(tid, Some(&cover.data)) {
+            cover_cache.remove_full_cover(tid);
+            return Ok(Some(thumb.to_string_lossy().to_string()));
         }
     }
     Ok(None)
@@ -263,7 +250,6 @@ pub async fn get_full_cover_file(
 ) -> Result<Option<String>, String> {
     let tid = track_id as u64;
 
-
     {
         let cover_cache = cover_cache_state.lock().map_err(|e| e.to_string())?;
         if let Some(path) = cover_cache.get_cover_file_path(tid, None, "") {
@@ -271,7 +257,23 @@ pub async fn get_full_cover_file(
         }
     }
 
+    if let Some(cover) = extract_track_cover(track_id, &library_state)? {
+        let cover_cache = cover_cache_state.lock().map_err(|e| e.to_string())?;
+        if let Some(file_path) = cover_cache.get_cover_file_path(
+            tid,
+            Some(&cover.data),
+            &cover.mime_type,
+        ) {
+            return Ok(Some(file_path.to_string_lossy().to_string()));
+        }
+    }
+    Ok(None)
+}
 
+fn extract_track_cover(
+    track_id: i64,
+    library_state: &State<'_, Mutex<MusicLibrary>>,
+) -> Result<Option<metadata::CoverData>, String> {
     let file_path = {
         let library = library_state.lock().map_err(|e| e.to_string())?;
         match library.get_track_by_id(track_id).map_err(|e| e.to_string())? {
@@ -280,20 +282,7 @@ pub async fn get_full_cover_file(
         }
     };
 
-
-    if let Some(path) = file_path {
-        if let Some(cover) = metadata::extract_cover(&path) {
-            let cover_cache = cover_cache_state.lock().map_err(|e| e.to_string())?;
-            if let Some(file_path) = cover_cache.get_cover_file_path(
-                tid,
-                Some(&cover.data),
-                &cover.mime_type,
-            ) {
-                return Ok(Some(file_path.to_string_lossy().to_string()));
-            }
-        }
-    }
-    Ok(None)
+    Ok(file_path.and_then(|path| metadata::extract_cover(&path)))
 }
 
 #[tauri::command]
