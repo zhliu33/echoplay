@@ -46,6 +46,15 @@ pub fn run() {
       let main_window = app.get_webview_window("main");
 
       if let Some(win) = main_window.clone() {
+        if let Ok(Some(monitor)) = app.primary_monitor() {
+          let size = monitor.size();
+          let width = (size.width as f64 * 0.7).round() as u32;
+          let height = (size.height as f64 * 0.7).round() as u32;
+          let _ = win.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }));
+        }
+      }
+
+      if let Some(win) = main_window.clone() {
         let win_clone = win.clone();
         app.listen("app-ready", move |_| {
           let _ = win_clone.center();

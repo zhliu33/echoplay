@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "EchoPlay",
   "version": "0.1.1",
-  "identifier": "com.echoplay.desktop",
+  "identifier": "com.echoplay",
   "mainBinaryName": "EchoPlay",
   "build": {
     "frontendDist": "../build",
@@ -42,7 +42,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",

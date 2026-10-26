@@ -120,7 +120,7 @@ jobs:
                 *x86_64.AppImage*)        key="linux-x86_64" ;;
                 *aarch64.app.tar.gz)      key="darwin-aarch64" ;;
                 *x86_64.app.tar.gz)       key="darwin-x86_64" ;;
-                *.msi)                    key="windows-x86_64" ;;
+                *.exe)                    key="windows-x86_64" ;;
                 *) continue ;;
               esac
               [ "$FIRST" -eq 1 ] || echo ","
