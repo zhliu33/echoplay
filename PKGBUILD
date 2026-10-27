@@ -1,5 +1,5 @@
 pkgname=echoplay
-pkgver=0.1.0
+pkgver=0.1.2
 pkgrel=1
 pkgdesc="A Tauri local music player"
 arch=('x86_64')
