@@ -42,7 +42,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": ["nsis", "app", "dmg", "deb"],
     "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
