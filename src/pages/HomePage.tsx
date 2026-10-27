@@ -45,6 +45,8 @@ export function HomePage({ onNavigate, onOpenDrawer, onOpenFullScreen }: HomePag
     playNext,
     playPrevious,
     cyclePlayMode,
+    addToQueue,
+    removeFromQueue,
   } = usePlayerStore();
 
   const { searchResults, isLoading, loadTracks, searchTracks } = useLibraryStore();
@@ -268,7 +270,9 @@ export function HomePage({ onNavigate, onOpenDrawer, onOpenFullScreen }: HomePag
           {displayTracks.length > 0 ? (
             <div className="flex-1 min-h-0 overflow-hidden">
               <VirtualTrackList 
-                tracks={displayTracks} 
+                tracks={displayTracks}
+                onAddToQueue={localSearchQuery ? addToQueue : undefined}
+                onRemoveFromQueue={localSearchQuery ? undefined : (track) => removeFromQueue(track.id)}
               />
             </div>
           ) : (
@@ -390,21 +394,11 @@ export function HomePage({ onNavigate, onOpenDrawer, onOpenFullScreen }: HomePag
                     <span className="font-medium">{trackInfo.genre}</span>
                   </div>
                 )}
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600 dark:text-gray-400">{t("home.labelDuration")}</span>
-                  <span className="font-medium">{trackInfo.duration ? formatDuration(trackInfo.duration) : "--:--"}</span>
-                </div>
               </div>
               
               {/* 音频技术信息 */}
               {(trackInfo.sample_rate || trackInfo.bitrate || trackInfo.codec || trackInfo.bit_depth) && (
                 <div className="space-y-2">
-                  {trackInfo.codec && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600 dark:text-gray-400">{t("home.labelCodec")}</span>
-                      <span className="font-medium">{trackInfo.codec}</span>
-                    </div>
-                  )}
                   {trackInfo.sample_rate && (
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600 dark:text-gray-400">{t("home.labelSampleRate")}</span>

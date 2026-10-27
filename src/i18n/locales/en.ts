@@ -91,6 +91,8 @@ const enDict: Record<string, string> = {
   "trackList.unknownTitle": "Unknown Title",
   "trackList.unknownArtist": "Unknown Artist",
   "trackList.unknownAlbum": "Unknown Album",
+  "trackList.addToQueue": "Add to playlist",
+  "trackList.removeFromQueue": "Remove from playlist",
 
   "confirm.remove.title": "Remove Folder",
   "confirm.remove.messageBefore": "Are you sure you want to remove the folder ",

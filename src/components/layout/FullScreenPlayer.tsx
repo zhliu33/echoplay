@@ -33,6 +33,7 @@ export function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerProps) {
     playNext,
     playPrevious,
     cyclePlayMode,
+    removeFromQueue,
   } = usePlayerStore();
 
   const { lyricsFontSize, fullScreenLayout } = useSettingsStore();
@@ -209,7 +210,8 @@ export function FullScreenPlayer({ isOpen, onClose }: FullScreenPlayerProps) {
                   </div>
                   <div className="h-[calc(100vh-120px)]">
                     <VirtualTrackList 
-                      tracks={queue} 
+                      tracks={queue}
+                      onRemoveFromQueue={(track) => removeFromQueue(track.id)}
                     />
                   </div>
                 </motion.div>

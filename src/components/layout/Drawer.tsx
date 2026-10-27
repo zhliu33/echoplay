@@ -15,7 +15,7 @@ interface DrawerProps {
 }
 
 export function Drawer({ isOpen, onClose, type }: DrawerProps) {
-  const { setCurrentTrack, setQueue, setPlayMode } = usePlayerStore();
+  const { setCurrentTrack, setQueue, setPlayMode, addToQueue } = usePlayerStore();
   const { t } = useTranslation();
   const localData = useDrawerData(type, isOpen);
 
@@ -72,6 +72,7 @@ export function Drawer({ isOpen, onClose, type }: DrawerProps) {
           {data.length > 0 ? (
             <VirtualTrackList
               tracks={data}
+              onAddToQueue={addToQueue}
             />
           ) : (
             <div className="text-center py-[clamp(2rem,8vh,5rem)] text-gray-500">

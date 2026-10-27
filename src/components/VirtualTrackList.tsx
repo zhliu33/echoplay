@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Track } from "@/types";
-import { Play, Music, Heart } from "lucide-react";
+import { Play, Music, Heart, Plus, Trash2 } from "lucide-react";
 import { usePlayerStore } from "@/stores/player-store";
 import { useFavoritesStore } from "@/stores/favorites-store";
 import { CoverImage } from "@/components/CoverImage";
@@ -10,11 +10,13 @@ import { useTranslation } from "@/i18n";
 
 interface VirtualTrackListProps {
   tracks: Track[];
+  onAddToQueue?: (track: Track) => void;
+  onRemoveFromQueue?: (track: Track) => void;
 }
 
 const ROW_HEIGHT = 72;
 
-export function VirtualTrackList({ tracks }: VirtualTrackListProps) {
+export function VirtualTrackList({ tracks, onAddToQueue, onRemoveFromQueue }: VirtualTrackListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
 
@@ -70,6 +72,8 @@ export function VirtualTrackList({ tracks }: VirtualTrackListProps) {
               <TrackRow
                 track={track}
                 onPlay={handlePlayTrack}
+                onAddToQueue={onAddToQueue}
+                onRemoveFromQueue={onRemoveFromQueue}
               />
             </div>
           );
@@ -82,9 +86,11 @@ export function VirtualTrackList({ tracks }: VirtualTrackListProps) {
 interface TrackRowProps {
   track: Track;
   onPlay: (track: Track) => void;
+  onAddToQueue?: (track: Track) => void;
+  onRemoveFromQueue?: (track: Track) => void;
 }
 
-const TrackRow = memo(function TrackRow({ track, onPlay }: TrackRowProps) {
+const TrackRow = memo(function TrackRow({ track, onPlay, onAddToQueue, onRemoveFromQueue }: TrackRowProps) {
   const { toggleFavorite, isFavorite } = useFavoritesStore();
   const { t } = useTranslation();
   
@@ -92,6 +98,16 @@ const TrackRow = memo(function TrackRow({ track, onPlay }: TrackRowProps) {
     e.stopPropagation();
     toggleFavorite(track.id, track);
   }, [toggleFavorite, track.id, track]);
+
+  const handleAddClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAddToQueue?.(track);
+  }, [onAddToQueue, track]);
+
+  const handleRemoveClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRemoveFromQueue?.(track);
+  }, [onRemoveFromQueue, track]);
 
   const favorite = isFavorite(track.id);
 
@@ -116,18 +132,40 @@ const TrackRow = memo(function TrackRow({ track, onPlay }: TrackRowProps) {
         </p>
       </div>
 
-      <button
-        onClick={handleFavoriteClick}
-        className="pad-xs rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-      >
-        <Heart
-          className={`icon-sm ${
-            favorite
-              ? "text-pink-500 fill-pink-500"
-              : "text-gray-400 opacity-0 group-hover:opacity-100"
-          } transition-colors`}
-        />
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={handleFavoriteClick}
+          className="pad-xs rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          <Heart
+            className={`icon-sm ${
+              favorite
+                ? "text-pink-500 fill-pink-500"
+                : "text-gray-400 opacity-0 group-hover:opacity-100"
+            } transition-colors`}
+          />
+        </button>
+
+        {onAddToQueue && (
+          <button
+            onClick={handleAddClick}
+            className="pad-xs rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title={t("trackList.addToQueue")}
+          >
+            <Plus className="icon-sm text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </button>
+        )}
+
+        {onRemoveFromQueue && (
+          <button
+            onClick={handleRemoveClick}
+            className="pad-xs rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title={t("trackList.removeFromQueue")}
+          >
+            <Trash2 className="icon-sm text-gray-400 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-colors" />
+          </button>
+        )}
+      </div>
     </div>
   );
 });

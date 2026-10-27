@@ -91,6 +91,8 @@ const zhDict: Record<string, string> = {
   "trackList.unknownTitle": "未知标题",
   "trackList.unknownArtist": "未知艺术家",
   "trackList.unknownAlbum": "未知专辑",
+  "trackList.addToQueue": "添加到播放列表",
+  "trackList.removeFromQueue": "从播放列表移除",
 
   "confirm.remove.title": "移除文件夹",
   "confirm.remove.messageBefore": "确定要移除文件夹 ",

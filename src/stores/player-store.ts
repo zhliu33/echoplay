@@ -27,6 +27,8 @@ interface PlayerStore extends PlayerState {
   cyclePlayMode: () => void;
   setPlayMode: (mode: PlayMode) => void;
   setQueue: (queue: Track[]) => void;
+  addToQueue: (track: Track) => void;
+  removeFromQueue: (trackId: string) => void;
   clearQueue: () => Promise<void>;
   playNext: () => Promise<void>;
   playPrevious: () => Promise<void>;
@@ -89,6 +91,50 @@ export const usePlayerStore = create<PlayerStore>()(
       setPlayMode: (mode) => set({ playMode: mode }),
 
       setQueue: (queue) => set({ queue, currentIndex: -1 }),
+
+      addToQueue: (track) => {
+        const { queue } = get();
+        if (queue.some((t) => t.id === track.id)) return;
+        set({ queue: [...queue, track] });
+      },
+
+      removeFromQueue: (trackId) => {
+        const { queue, currentIndex, currentTrack } = get();
+        const removeIndex = queue.findIndex((t) => t.id === trackId);
+        if (removeIndex < 0) return;
+
+        const newQueue = queue.filter((t) => t.id !== trackId);
+
+        if (newQueue.length === 0) {
+          getPlayerEngine().stop();
+          set({
+            queue: [],
+            currentIndex: -1,
+            currentTrack: null,
+            isPlaying: false,
+            progress: 0,
+          });
+          return;
+        }
+
+        if (removeIndex < currentIndex) {
+          set({ queue: newQueue, currentIndex: currentIndex - 1 });
+        } else if (removeIndex === currentIndex) {
+          const nextTrack = newQueue[Math.min(currentIndex, newQueue.length - 1)];
+          set({
+            queue: newQueue,
+            currentIndex: Math.min(currentIndex, newQueue.length - 1),
+            currentTrack: nextTrack,
+            progress: 0,
+          });
+          playerEvents.emit("track-changed", nextTrack);
+          if (nextTrack?.playUrl) {
+            syncEqualizer().then(() => getPlayerEngine().play(nextTrack.playUrl));
+          }
+        } else {
+          set({ queue: newQueue });
+        }
+      },
 
       clearQueue: async () => {
         await getPlayerEngine().stop();
